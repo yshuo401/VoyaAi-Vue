@@ -1,7 +1,7 @@
 <template>
-  <RegionManager kind="city" />
+  <RegionManager kind="country" />
 </template>
 
-<script setup name="VoyaAiCity">
+<script setup name="VoyaAiCountry">
 import RegionManager from '../components/RegionManager.vue'
 </script>
