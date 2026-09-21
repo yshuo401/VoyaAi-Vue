@@ -1,6 +1,6 @@
 # VoyaAi 旅游管理系统从零到一接口契约
 
-版本：V1.7  
+版本：V1.8  
 编写日期：2026-09-21  
 适用项目：VoyaAi 后端、RuoYi-Vue3 管理端、VoyaAI-app 微信小程序
 
@@ -142,7 +142,7 @@ Authorization: Bearer va_<43位URL安全随机字符>
 | `voya_ai_trip_item` | 行程项 | 数据表已有，接口规划中 |
 | `voya_ai_trip_share` | 行程分享 | 数据表已有，接口规划中 |
 | `voya_ai_message` | 消息通知 | 数据表已有，接口规划中 |
-| `voya_ai_feedback` | 意见反馈 | 数据表已有，接口规划中 |
+| `voya_ai_feedback` | 意见反馈 | 已实现小程序匿名提交和管理端查询、处理、导出 |
 
 ## 4 已实现管理端接口
 
@@ -594,6 +594,26 @@ Query：`pageNum`、`pageSize`、`name`、`cityId`、`guideType`、`publishStatu
 
 权限：`voyaai:user:edit`。请求：`{"id":1,"status":"1"}`，状态必须为 `0` 或 `1`。停用后立即生效：该用户无法再次登录，已有小程序会话在下次请求时自动失效；重新启用后恢复。
 
+### 4.13 意见反馈管理
+
+权限前缀：`voyaai:feedback`。网页路径：`/voyaai/feedback`。反馈由小程序端提交，管理端做查询、处理和导出，不提供删除。
+
+#### GET `/voyaai/feedback/list`
+
+权限：`voyaai:feedback:list`。Query：`pageNum`、`pageSize`、`status`、`keyword`、`contact`、`beginCreateTime`、`endCreateTime`。`status` 为 `0` 待处理、`1` 已处理；`keyword` 匹配反馈内容，`contact` 匹配联系方式，均按模糊匹配；时间范围包含首尾两天。返回分页字段：`id`、`userId`、`nickname`、`avatarUrl`、`content`、`contact`、`images`、`status`、`handleRemark`、`handleBy`、`handleTime`、`createTime`。匿名反馈时 `userId`、`nickname`、`avatarUrl` 为 `null`。
+
+#### GET `/voyaai/feedback/{id}`
+
+权限：`voyaai:feedback:query`。返回单条反馈，字段同上；不存在返回 `404`。
+
+#### PUT `/voyaai/feedback/{id}/handle`
+
+权限：`voyaai:feedback:handle`。请求：`{"handleRemark":"已回复用户"}`，处理备注最多 500 字。只处理待处理状态的反馈，已处理返回 `409`；成功后写入处理人、处理时间和处理备注。
+
+#### GET `/voyaai/feedback/export`
+
+权限：`voyaai:feedback:export`。Query 同列表接口，导出当前筛选条件下全部数据的 Excel。
+
 ## 5 已实现小程序接口
 
 ### 5.1 微信登录
@@ -837,6 +857,12 @@ Query：`pageNum`、`pageSize`（最大 50）、`targetType` 可选。返回 `da
 
 需要小程序 Token。已点赞则取消，未点赞则点赞。返回 `{"liked":true,"likeCount":13}`，评论表的 `like_count` 同步维护；评论不存在或已删除返回 `404`。
 
+### 5.12 意见反馈
+
+#### POST `/app/voyaai/feedback`
+
+无需 Token，可匿名提交；已登录用户由服务端自动关联用户 ID。请求：`{"content":"希望增加夜间模式","contact":"wechat@example.com","images":"/a.jpg,/b.jpg"}`。`content` 必填且最多 1000 字，`contact` 最多 100 字，`images` 为逗号分隔路径、最多 2000 字。所有字段会去掉首尾空格，成功返回 `code=200`，无业务数据。
+
 ## 6 文件上传接口
 
 ### POST `/common/upload`
@@ -971,16 +997,6 @@ DELETE /app/voyaai/messages/{id}
 
 消息返回 `id`、`type`、`title`、`content`、`bizType`、`bizId`、`isRead`、`readTime`、`createTime`。用户只能访问自己的消息。
 
-### 7.6 意见反馈
-
-小程序：
-
-```text
-POST /app/voyaai/feedback
-```
-
-请求：`content`（最多 1000 字）、`contact`（最多 100 字）、`images`（最多 2000 字，逗号分隔）。用户 ID 从 Token 获取，可匿名提交。管理端后续增加 `/voyaai/feedback/list`、`/{id}`、`/{id}/handle` 和导出接口。
-
 ## 8 前后端并行开发规则
 
 1. 前端先建立 API 文件，不在页面中散落 URL。
@@ -998,14 +1014,14 @@ POST /app/voyaai/feedback
 
 ### 已完成阶段
 
-国家、省份、城市、景点的管理端 CRUD 和小程序公开浏览已经完成；微信登录、用户资料和头像已经完成；攻略管理和攻略公开读接口已经完成；收藏和点赞模块的管理端查询删除、小程序收藏、点赞、取消、状态查询和计数维护已经完成；浏览记录的匿名写入、登录用户历史查询和清空、管理端查询已经完成；搜索历史的小程序保存、去重、保留 20 条、查询、删除和清空，以及管理端查询删除已经完成；评论的小程序查询、发表、回复、删除、点赞和管理端查询、删除已经完成；标签的管理端 CRUD、状态切换、关联保护删除和小程序公开读取已经完成；用户管理端查询和状态管理已经完成。
+国家、省份、城市、景点的管理端 CRUD 和小程序公开浏览已经完成；微信登录、用户资料和头像已经完成；攻略管理和攻略公开读接口已经完成；收藏和点赞模块的管理端查询删除、小程序收藏、点赞、取消、状态查询和计数维护已经完成；浏览记录的匿名写入、登录用户历史查询和清空、管理端查询已经完成；搜索历史的小程序保存、去重、保留 20 条、查询、删除和清空，以及管理端查询删除已经完成；评论的小程序查询、发表、回复、删除、点赞和管理端查询、删除已经完成；标签的管理端 CRUD、状态切换、关联保护删除和小程序公开读取已经完成；用户管理端查询和状态管理已经完成；意见反馈的小程序匿名提交和管理端查询、处理、导出已经完成。
 
 ### 下一阶段
 
 1. 评论审核与隐藏：启用 `status` 字段，管理端支持隐藏/恢复，公开列表只显示正常评论。
 2. 行程：完成主表、天、项的事务性 CRUD。
 3. AI：确定模型服务后接入会话和行程草案。
-4. 酒店、美食、消息、反馈：先确定数据源和管理端页面，再接入小程序。
+4. 酒店、美食、消息：先确定数据源和管理端页面，再接入小程序。
 5. HTTPS、合法域名、真机调试和正式发布。
 
 ### 每个模块的验收条件
@@ -1036,7 +1052,7 @@ POST /app/voyaai/feedback
 | `/voyaai/comment` | 评论管理 | 已实现 | `/voyaai/comment/**` |
 | `/voyaai/tag` | 标签管理 | 已实现 | `/voyaai/tag/**` |
 | `/voyaai/user` | 用户管理 | 已实现 | `/voyaai/user/**` |
-| `/voyaai/feedback` | 意见反馈 | 规划中 | `/voyaai/feedback/**` |
+| `/voyaai/feedback` | 意见反馈 | 已实现 | `/voyaai/feedback/**` |
 
 ### 10.2 微信小程序页面
 
@@ -1061,6 +1077,7 @@ POST /app/voyaai/feedback
 | 我的浏览历史 | 接口已实现，小程序页面待接入 | `/app/voyaai/me/view-history`、`/app/voyaai/view-logs` |
 | 搜索页搜索历史 | 接口已实现，小程序页面待接入 | `/app/voyaai/me/search-history` |
 | 详情页评论列表和发布 | 接口已实现，小程序页面待接入 | `/app/voyaai/comments`、`/app/voyaai/comments/{id}/like` |
+| 意见反馈提交 | 接口已实现，小程序页面待接入 | `/app/voyaai/feedback` |
 
 ## 11 当前代码和文档位置
 
@@ -1076,5 +1093,6 @@ POST /app/voyaai/feedback
 评论菜单脚本：后端仓库 `sql/voyaai_comment_menu.sql`、`sql/voyaai_comment_schema.sql`
 标签菜单和字段脚本：后端仓库 `sql/voyaai_tag_menu.sql`、`sql/voyaai_tag_schema.sql`
 用户管理菜单脚本：后端仓库 `sql/voyaai_user_menu.sql`
+意见反馈菜单和字段脚本：后端仓库 `sql/voyaai_feedback_menu.sql`、`sql/voyaai_feedback_schema.sql`
 
 本文档是项目级接口总规范；模块细节可以在对应仓库文档中补充，但不得与本文档的 URL、字段名称、响应包装和状态码冲突。
