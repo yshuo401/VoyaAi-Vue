@@ -1,6 +1,6 @@
 # VoyaAi 旅游管理系统从零到一接口契约
 
-版本：V1.8  
+版本：V1.9  
 编写日期：2026-09-21  
 适用项目：VoyaAi 后端、RuoYi-Vue3 管理端、VoyaAI-app 微信小程序
 
@@ -137,10 +137,10 @@ Authorization: Bearer va_<43位URL安全随机字符>
 | `voya_ai_comment` | 评论 | 已实现小程序评论、回复、删除、点赞和管理端查询、删除 |
 | `voya_ai_view_log` | 浏览记录 | 已实现匿名浏览记录、登录用户历史查询和清空、管理端查询 |
 | `voya_ai_search_history` | 搜索历史 | 已实现小程序保存、去重、查询、删除、清空和管理端查询、删除 |
-| `voya_ai_trip` | 行程主表 | 数据表已有，接口规划中 |
-| `voya_ai_trip_day` | 行程天 | 数据表已有，接口规划中 |
-| `voya_ai_trip_item` | 行程项 | 数据表已有，接口规划中 |
-| `voya_ai_trip_share` | 行程分享 | 数据表已有，接口规划中 |
+| `voya_ai_trip` | 行程主表 | 已实现小程序 CRUD 和管理端查询 |
+| `voya_ai_trip_day` | 行程天 | 已实现 |
+| `voya_ai_trip_item` | 行程项 | 已实现 |
+| `voya_ai_trip_share` | 行程分享 | 已实现分享、失效和匿名查看 |
 | `voya_ai_message` | 消息通知 | 数据表已有，接口规划中 |
 | `voya_ai_feedback` | 意见反馈 | 已实现小程序匿名提交和管理端查询、处理、导出 |
 
@@ -614,6 +614,18 @@ Query：`pageNum`、`pageSize`、`name`、`cityId`、`guideType`、`publishStatu
 
 权限：`voyaai:feedback:export`。Query 同列表接口，导出当前筛选条件下全部数据的 Excel。
 
+### 4.14 行程管理
+
+权限前缀：`voyaai:trip`。网页路径：`/voyaai/trip`。行程由小程序端创建和维护，管理端只做查询，不提供修改和删除。
+
+#### GET `/voyaai/trip/list`
+
+权限：`voyaai:trip:list`。Query：`pageNum`、`pageSize`、`cityId`、`keyword`、`source`、`beginCreateTime`、`endCreateTime`。`keyword` 匹配行程标题，`source` 只接受 `USER`、`AI`、`ADMIN`。返回分页字段：`id`、`nickname`、`avatarUrl`、`cityName`、`title`、`startDate`、`endDate`、`peopleCount`、`budget`、`source`、`status`、`dayCount`、`createTime`。
+
+#### GET `/voyaai/trip/{id}`
+
+权限：`voyaai:trip:query`。返回行程详情，包含 `nickname`、`avatarUrl`、城市信息、日期、预算等主信息，并嵌套 `days`，每天包含 `dayNumber`、`date`、`title`、`description` 和 `items`；行程项包含 `attractionName`、`itemType`、`title`、`startTime`、`endTime`、`address`、`estimatedCost`、`sort`。不存在返回 `404`。
+
 ## 5 已实现小程序接口
 
 ### 5.1 微信登录
@@ -863,6 +875,46 @@ Query：`pageNum`、`pageSize`（最大 50）、`targetType` 可选。返回 `da
 
 无需 Token，可匿名提交；已登录用户由服务端自动关联用户 ID。请求：`{"content":"希望增加夜间模式","contact":"wechat@example.com","images":"/a.jpg,/b.jpg"}`。`content` 必填且最多 1000 字，`contact` 最多 100 字，`images` 为逗号分隔路径、最多 2000 字。所有字段会去掉首尾空格，成功返回 `code=200`，无业务数据。
 
+### 5.13 行程
+
+认证：小程序 Token，行程只能由所属用户读取和修改。
+
+| 方法 | URL | 用途 |
+|---|---|---|
+| GET | `/app/voyaai/trips` | 我的行程分页 |
+| POST | `/app/voyaai/trips` | 创建行程 |
+| GET | `/app/voyaai/trips/{id}` | 行程详情及天、行程项 |
+| PUT | `/app/voyaai/trips/{id}` | 修改行程主信息 |
+| DELETE | `/app/voyaai/trips/{id}` | 删除行程 |
+| POST | `/app/voyaai/trips/{tripId}/days` | 新增某一天 |
+| PUT | `/app/voyaai/trips/{tripId}/days/{dayId}` | 修改某一天 |
+| DELETE | `/app/voyaai/trips/{tripId}/days/{dayId}` | 删除某一天 |
+| POST | `/app/voyaai/trips/{tripId}/days/{dayId}/items` | 新增行程项 |
+| PUT | `/app/voyaai/trips/{tripId}/days/{dayId}/items/{itemId}` | 修改行程项 |
+| DELETE | `/app/voyaai/trips/{tripId}/days/{dayId}/items/{itemId}` | 删除行程项 |
+
+#### POST `/app/voyaai/trips`
+
+请求：`{"cityId":10,"title":"成都三日游","coverImage":"/profile/upload/guide/cover.jpg","startDate":"2026-10-01","endDate":"2026-10-03","peopleCount":2,"budget":3000,"travelType":"自由行","description":"第一次去成都","source":"USER"}`。`cityId` 必须是存在且启用的城市，否则返回 `400`；结束日期不能早于开始日期；人数至少 1；预算不小于 0；标题最多 200 字、描述最多 1000 字、出行方式最多 30 字；`source` 只允许 `USER`、`AI`、`ADMIN`，客户端默认 `USER`。
+
+#### GET `/app/voyaai/trips`
+
+Query：`pageNum`、`pageSize`（最大 50）、`keyword`、`status`。返回 `data.{rows,total}`，`rows` 为 `id`、`title`、`coverImage`、`startDate`、`endDate`、`peopleCount`、`budget`、`travelType`、`source`、`status`、`dayCount`、`cityName`、`createTime`，按创建时间倒序。
+
+#### 行程日和行程项
+
+天 JSON：`dayNumber`、`date`、`title`、`description`；同一行程 `dayNumber` 唯一，重复返回 `409`。项 JSON：`attractionId`（可空）、`itemType`（1 景点、2 餐饮、3 酒店、4 交通、5 购物、6 其他）、`title`、`startTime`、`endTime`、`address`、`description`、`estimatedCost`、`sort`。所有删除均为逻辑删除；修改不存在或不属于当前用户的数据返回 `404`。
+
+### 5.14 行程分享
+
+| 方法 | URL | 用途 |
+|---|---|---|
+| POST | `/app/voyaai/trips/{tripId}/share` | 创建或刷新分享 |
+| DELETE | `/app/voyaai/trips/{tripId}/share` | 失效分享 |
+| GET | `/app/voyaai/trip-shares/{shareCode}` | 匿名查看分享行程 |
+
+分享有效期 7 天。创建返回 `shareCode`、`shareToken`、`expireTime`、`url`；已有有效分享时幂等返回原分享，过期或失效后再次调用会生成新分享。匿名查看只返回行程标题、城市、日期、人数、预算、描述和行程安排，不返回用户 ID、昵称、头像等隐私；分享失效、过期或行程已删除返回 `404`。
+
 ## 6 文件上传接口
 
 ### POST `/common/upload`
@@ -891,72 +943,7 @@ Query：`pageNum`、`pageSize`（最大 50）、`targetType` 可选。返回 `da
 
 以下接口是后续开发的正式契约。它们对应数据库已有表，但当前代码尚未实现；在后端完成前，前端必须显示“即将上线”或空状态，不能把本地演示数组当作真实业务数据。
 
-### 7.1 行程管理
-
-认证：小程序 Token。行程只能由所属用户读取和修改。
-
-#### 行程主表
-
-| 方法 | URL | 用途 |
-|---|---|---|
-| GET | `/app/voyaai/trips` | 我的行程分页 |
-| POST | `/app/voyaai/trips` | 创建行程 |
-| GET | `/app/voyaai/trips/{id}` | 行程详情及天、行程项 |
-| PUT | `/app/voyaai/trips/{id}` | 修改行程主信息 |
-| DELETE | `/app/voyaai/trips/{id}` | 删除行程 |
-
-创建 JSON：
-
-```json
-{
-  "cityId": 10,
-  "title": "成都三日游行程",
-  "coverImage": "/profile/upload/guide/cover.jpg",
-  "startDate": "2026-10-01",
-  "endDate": "2026-10-03",
-  "peopleCount": 2,
-  "budget": 3000,
-  "travelType": "自由行",
-  "description": "第一次去成都",
-  "source": "USER"
-}
-```
-
-规则：`cityId` 必须是启用城市；结束日期不能早于开始日期；人数至少 1；预算不能小于 0；`source` 只允许 `USER`、`AI`、`ADMIN`，客户端创建默认 `USER`。
-
-#### 行程日
-
-| 方法 | URL | 用途 |
-|---|---|---|
-| POST | `/app/voyaai/trips/{tripId}/days` | 新增某一天 |
-| PUT | `/app/voyaai/trips/{tripId}/days/{dayId}` | 修改某一天 |
-| DELETE | `/app/voyaai/trips/{tripId}/days/{dayId}` | 删除某一天 |
-
-JSON：`dayNumber`、`date`、`title`、`description`。同一行程的 `dayNumber` 唯一。
-
-#### 行程项
-
-| 方法 | URL | 用途 |
-|---|---|---|
-| POST | `/app/voyaai/trips/{tripId}/days/{dayId}/items` | 新增行程项 |
-| PUT | `/app/voyaai/trips/{tripId}/days/{dayId}/items/{itemId}` | 修改行程项 |
-| DELETE | `/app/voyaai/trips/{tripId}/days/{dayId}/items/{itemId}` | 删除行程项 |
-
-JSON：`attractionId` 可空、`itemType`（1 景点、2 餐饮、3 酒店、4 交通、5 购物、6 其他）、`title`、`startTime`、`endTime`、`address`、`description`、`estimatedCost`、`sort`。
-
-### 7.2 行程分享
-
-认证：小程序 Token。
-
-| 方法 | URL | 用途 |
-|---|---|---|
-| POST | `/app/voyaai/trips/{tripId}/share` | 创建或刷新分享 |
-| DELETE | `/app/voyaai/trips/{tripId}/share` | 失效分享 |
-| GET | `/app/voyaai/trip-shares/{shareCode}` | 匿名查看分享行程 |
-
-创建返回 `shareCode`、`shareToken`、`expireTime`、`url`。分享查看只返回公开行程数据，不返回用户隐私。
-
-### 7.3 AI 助手
+### 7.1 AI 助手
 
 当前模型服务和密钥尚未确定，所以此模块暂未实现。推荐先固定以下契约，模型调用全部放在后端，密钥只放环境变量。
 
@@ -971,7 +958,7 @@ JSON：`attractionId` 可空、`itemType`（1 景点、2 餐饮、3 酒店、4 �
 
 生成行程请求建议：`cityId`、`days`、`budget`、`peopleCount`、`travelType`、`preferences[]`。返回草案时使用与行程模块相同的 `days/items` 结构，确认时后端重新校验景点和城市，不能直接信任模型返回的 ID。
 
-### 7.4 酒店和美食
+### 7.2 酒店和美食
 
 当前没有酒店和美食表，也没有第三方数据源，页面是视觉壳。正式开发前要先确定数据来源。推荐接口：
 
@@ -984,7 +971,7 @@ GET /app/voyaai/foods/{id}
 
 列表统一返回 `data.rows/data.total`，详情返回 `data`。价格、地址、图片、评分、经纬度和营业时间必须在后端统一字段后再接入小程序。
 
-### 7.5 消息通知
+### 7.3 消息通知
 
 数据库表已经存在，接口尚未实现：
 
@@ -1014,15 +1001,14 @@ DELETE /app/voyaai/messages/{id}
 
 ### 已完成阶段
 
-国家、省份、城市、景点的管理端 CRUD 和小程序公开浏览已经完成；微信登录、用户资料和头像已经完成；攻略管理和攻略公开读接口已经完成；收藏和点赞模块的管理端查询删除、小程序收藏、点赞、取消、状态查询和计数维护已经完成；浏览记录的匿名写入、登录用户历史查询和清空、管理端查询已经完成；搜索历史的小程序保存、去重、保留 20 条、查询、删除和清空，以及管理端查询删除已经完成；评论的小程序查询、发表、回复、删除、点赞和管理端查询、删除已经完成；标签的管理端 CRUD、状态切换、关联保护删除和小程序公开读取已经完成；用户管理端查询和状态管理已经完成；意见反馈的小程序匿名提交和管理端查询、处理、导出已经完成。
+国家、省份、城市、景点的管理端 CRUD 和小程序公开浏览已经完成；微信登录、用户资料和头像已经完成；攻略管理和攻略公开读接口已经完成；收藏和点赞模块的管理端查询删除、小程序收藏、点赞、取消、状态查询和计数维护已经完成；浏览记录的匿名写入、登录用户历史查询和清空、管理端查询已经完成；搜索历史的小程序保存、去重、保留 20 条、查询、删除和清空，以及管理端查询删除已经完成；评论的小程序查询、发表、回复、删除、点赞和管理端查询、删除已经完成；标签的管理端 CRUD、状态切换、关联保护删除和小程序公开读取已经完成；用户管理端查询和状态管理已经完成；意见反馈的小程序匿名提交和管理端查询、处理、导出已经完成；行程、行程日、行程项、行程分享和管理端行程查询已经完成。
 
 ### 下一阶段
 
 1. 评论审核与隐藏：启用 `status` 字段，管理端支持隐藏/恢复，公开列表只显示正常评论。
-2. 行程：完成主表、天、项的事务性 CRUD。
-3. AI：确定模型服务后接入会话和行程草案。
-4. 酒店、美食、消息：先确定数据源和管理端页面，再接入小程序。
-5. HTTPS、合法域名、真机调试和正式发布。
+2. AI：确定模型服务后接入会话和行程草案。
+3. 酒店、美食、消息：先确定数据源和管理端页面，再接入小程序。
+4. HTTPS、合法域名、真机调试和正式发布。
 
 ### 每个模块的验收条件
 
@@ -1052,6 +1038,7 @@ DELETE /app/voyaai/messages/{id}
 | `/voyaai/comment` | 评论管理 | 已实现 | `/voyaai/comment/**` |
 | `/voyaai/tag` | 标签管理 | 已实现 | `/voyaai/tag/**` |
 | `/voyaai/user` | 用户管理 | 已实现 | `/voyaai/user/**` |
+| `/voyaai/trip` | 行程管理 | 已实现 | `/voyaai/trip/**` |
 | `/voyaai/feedback` | 意见反馈 | 已实现 | `/voyaai/feedback/**` |
 
 ### 10.2 微信小程序页面
@@ -1066,8 +1053,9 @@ DELETE /app/voyaai/messages/{id}
 | `pages/guides` | 已接入攻略真实数据 | `/app/voyaai/guides`、`/app/voyaai/tags` |
 | `pages/guide-detail` | 已接入攻略真实数据 | `/app/voyaai/guides/{id}` |
 | `pages/me` | 登录和资料已接入 | `/app/voyaai/auth/**`、`/app/voyaai/me/**` |
-| `pages/trips` | 视觉壳 | 行程接口规划中 |
-| `pages/trip-detail` | 视觉壳 | 行程接口规划中 |
+| `pages/trips` | 接口已实现，小程序页面待接入 | `/app/voyaai/trips` |
+| `pages/trip-detail` | 接口已实现，小程序页面待接入 | `/app/voyaai/trips/{id}`、`/app/voyaai/trips/{tripId}/days/**`、`/app/voyaai/trips/{tripId}/days/{dayId}/items/**` |
+| 行程分享页 | 接口已实现，小程序页面待接入 | `/app/voyaai/trips/{tripId}/share`、`/app/voyaai/trip-shares/{shareCode}` |
 | `pages/ai` | 视觉壳 | AI 接口规划中 |
 | `pages/hotels` | 视觉壳 | 酒店接口规划中 |
 | `pages/food` | 视觉壳 | 美食接口规划中 |
@@ -1094,5 +1082,6 @@ DELETE /app/voyaai/messages/{id}
 标签菜单和字段脚本：后端仓库 `sql/voyaai_tag_menu.sql`、`sql/voyaai_tag_schema.sql`
 用户管理菜单脚本：后端仓库 `sql/voyaai_user_menu.sql`
 意见反馈菜单和字段脚本：后端仓库 `sql/voyaai_feedback_menu.sql`、`sql/voyaai_feedback_schema.sql`
+行程菜单和字段脚本：后端仓库 `sql/voyaai_trip_menu.sql`、`sql/voyaai_trip_schema.sql`
 
 本文档是项目级接口总规范；模块细节可以在对应仓库文档中补充，但不得与本文档的 URL、字段名称、响应包装和状态码冲突。
