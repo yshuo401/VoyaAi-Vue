@@ -1,6 +1,6 @@
 # VoyaAi 旅游管理系统从零到一接口契约
 
-版本：V1.5  
+版本：V1.6  
 编写日期：2026-09-21  
 适用项目：VoyaAi 后端、RuoYi-Vue3 管理端、VoyaAI-app 微信小程序
 
@@ -130,7 +130,7 @@ Authorization: Bearer va_<43位URL安全随机字符>
 | `voya_ai_attraction` | 景点 | 已实现 |
 | `voya_ai_attraction_image` | 景点多图 | 已实现 |
 | `voya_ai_guide` | 旅游攻略 | 已实现管理和公开读取 |
-| `voya_ai_tag` | 标签 | 已有表，当前提供公开标签读取 |
+| `voya_ai_tag` | 标签 | 已实现管理端 CRUD、状态切换和删除，小程序公开读取 |
 | `voya_ai_guide_tag` | 攻略标签关联 | 已接入攻略新增、修改和详情 |
 | `voya_ai_favorite` | 收藏 | 已实现小程序收藏、取消、状态查询和管理端查询、删除 |
 | `voya_ai_like` | 点赞 | 已实现小程序景点、攻略点赞、取消、状态查询和管理端查询、删除 |
@@ -543,6 +543,41 @@ Query：`pageNum`、`pageSize`、`name`、`cityId`、`guideType`、`publishStatu
 
 权限：`voyaai:comment:remove`。`ids` 为逗号分隔的评论 ID，逻辑删除且不可恢复。删除一级评论时其下回复一并逻辑删除，并同步扣减景点、攻略的 `comment_count`。
 
+### 4.11 标签管理
+
+权限前缀：`voyaai:tag`。网页路径：`/voyaai/tag`。
+
+| 方法 | URL | 用途 |
+|---|---|---|
+| GET | `/voyaai/tag/list` | 标签分页 |
+| GET | `/voyaai/tag/{id}` | 标签详情 |
+| POST | `/voyaai/tag` | 新增标签 |
+| PUT | `/voyaai/tag` | 修改标签 |
+| PUT | `/voyaai/tag/changeStatus` | 启用或停用 |
+| DELETE | `/voyaai/tag/{ids}` | 删除标签 |
+
+#### GET `/voyaai/tag/list`
+
+权限：`voyaai:tag:list`。Query：`pageNum`、`pageSize`、`name`、`type`、`status`、`beginCreateTime`、`endCreateTime`。`name` 按模糊匹配；返回分页字段：`id`、`name`、`type`、`sort`、`status`、`remark`、`createBy`、`createTime`、`updateBy`、`updateTime`。
+
+#### POST `/voyaai/tag`
+
+权限：`voyaai:tag:add`。请求：`{"name":"美食","type":"guide","sort":10,"status":"0","remark":""}`。名称最多 50 字、类型最多 30 字、备注最多 500 字、排序不小于 0、状态为 `0` 或 `1`。名称和类型会去掉首尾空格。同一 `type` 下名称不能重复，返回 `409`。
+
+#### PUT `/voyaai/tag`
+
+权限：`voyaai:tag:edit`。请求体增加 `id`，其他字段同新增。标签不存在或已删除返回 `404`。
+
+#### PUT `/voyaai/tag/changeStatus`
+
+权限：`voyaai:tag:edit`。请求：`{"id":1,"status":"1"}`。停用后公开标签接口不再返回该标签，攻略新增和修改也不允许继续选择它。
+
+#### DELETE `/voyaai/tag/{ids}`
+
+权限：`voyaai:tag:remove`。`ids` 为逗号分隔的标签 ID，逻辑删除。任一标签不存在返回 `404`；存在 `voya_ai_guide_tag` 攻略关联时返回 `409`，不会删除任何标签。
+
+标签表唯一键 `uk_tag_name_type` 不包含删除标志，因此已删除标签仍占用其名称，重名会返回 `409`。表缺少的 `create_by`、`update_by` 两列由 `sql/voyaai_tag_schema.sql` 幂等补齐。
+
 ## 5 已实现小程序接口
 
 ### 5.1 微信登录
@@ -920,22 +955,7 @@ DELETE /app/voyaai/messages/{id}
 
 消息返回 `id`、`type`、`title`、`content`、`bizType`、`bizId`、`isRead`、`readTime`、`createTime`。用户只能访问自己的消息。
 
-### 7.6 标签管理
-
-小程序的 `GET /app/voyaai/tags` 已实现，但标签的管理端 CRUD 尚未实现。攻略管理页面当前只能选择数据库中已经存在的启用标签。后续管理员接口固定为：
-
-```text
-GET    /voyaai/tag/list
-GET    /voyaai/tag/{id}
-POST   /voyaai/tag
-PUT    /voyaai/tag
-PUT    /voyaai/tag/changeStatus
-DELETE /voyaai/tag/{ids}
-```
-
-权限前缀为 `voyaai:tag`。新增 JSON：`{"name":"美食","type":"guide","sort":10,"status":"0","remark":""}`。同一 `type` 下标签名称不能重复；删除标签前需要检查 `voya_ai_guide_tag` 关联，存在关联时返回 `409`。管理端列表返回 `id`、`name`、`type`、`sort`、`status`、`remark`、审计字段。
-
-### 7.7 意见反馈
+### 7.6 意见反馈
 
 小程序：
 
@@ -962,7 +982,7 @@ POST /app/voyaai/feedback
 
 ### 已完成阶段
 
-国家、省份、城市、景点的管理端 CRUD 和小程序公开浏览已经完成；微信登录、用户资料和头像已经完成；攻略管理和攻略公开读接口已经完成；收藏和点赞模块的管理端查询删除、小程序收藏、点赞、取消、状态查询和计数维护已经完成；浏览记录的匿名写入、登录用户历史查询和清空、管理端查询已经完成；搜索历史的小程序保存、去重、保留 20 条、查询、删除和清空，以及管理端查询删除已经完成；评论的小程序查询、发表、回复、删除、点赞和管理端查询、删除已经完成。
+国家、省份、城市、景点的管理端 CRUD 和小程序公开浏览已经完成；微信登录、用户资料和头像已经完成；攻略管理和攻略公开读接口已经完成；收藏和点赞模块的管理端查询删除、小程序收藏、点赞、取消、状态查询和计数维护已经完成；浏览记录的匿名写入、登录用户历史查询和清空、管理端查询已经完成；搜索历史的小程序保存、去重、保留 20 条、查询、删除和清空，以及管理端查询删除已经完成；评论的小程序查询、发表、回复、删除、点赞和管理端查询、删除已经完成；标签的管理端 CRUD、状态切换、关联保护删除和小程序公开读取已经完成。
 
 ### 下一阶段
 
@@ -998,7 +1018,7 @@ POST /app/voyaai/feedback
 | `/voyaai/viewLog` | 浏览记录 | 已实现 | `/voyaai/viewLog/**` |
 | `/voyaai/searchHistory` | 搜索历史 | 已实现 | `/voyaai/searchHistory/**` |
 | `/voyaai/comment` | 评论管理 | 已实现 | `/voyaai/comment/**` |
-| `/voyaai/tag` | 标签管理 | 规划中 | `/voyaai/tag/**` |
+| `/voyaai/tag` | 标签管理 | 已实现 | `/voyaai/tag/**` |
 | `/voyaai/feedback` | 意见反馈 | 规划中 | `/voyaai/feedback/**` |
 
 ### 10.2 微信小程序页面
@@ -1037,5 +1057,6 @@ POST /app/voyaai/feedback
 浏览记录菜单脚本：后端仓库 `sql/voyaai_view_log_menu.sql`
 搜索历史菜单脚本：后端仓库 `sql/voyaai_search_history_menu.sql`
 评论菜单脚本：后端仓库 `sql/voyaai_comment_menu.sql`、`sql/voyaai_comment_schema.sql`
+标签菜单和字段脚本：后端仓库 `sql/voyaai_tag_menu.sql`、`sql/voyaai_tag_schema.sql`
 
 本文档是项目级接口总规范；模块细节可以在对应仓库文档中补充，但不得与本文档的 URL、字段名称、响应包装和状态码冲突。
