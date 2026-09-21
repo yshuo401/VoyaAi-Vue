@@ -1,6 +1,6 @@
 # VoyaAi 旅游管理系统从零到一接口契约
 
-版本：V1.0  
+版本：V1.1  
 编写日期：2026-09-21  
 适用项目：VoyaAi 后端、RuoYi-Vue3 管理端、VoyaAI-app 微信小程序
 
@@ -132,7 +132,7 @@ Authorization: Bearer va_<43位URL安全随机字符>
 | `voya_ai_guide` | 旅游攻略 | 已实现管理和公开读取 |
 | `voya_ai_tag` | 标签 | 已有表，当前提供公开标签读取 |
 | `voya_ai_guide_tag` | 攻略标签关联 | 已接入攻略新增、修改和详情 |
-| `voya_ai_favorite` | 收藏 | 数据表已有，接口规划中 |
+| `voya_ai_favorite` | 收藏 | 已实现小程序收藏、取消、状态查询和管理端查询、删除 |
 | `voya_ai_like` | 点赞 | 数据表已有，接口规划中 |
 | `voya_ai_comment` | 评论 | 数据表已有，接口规划中 |
 | `voya_ai_view_log` | 浏览记录 | 数据表已有，接口规划中 |
@@ -439,6 +439,35 @@ Query：`pageNum`、`pageSize`、`name`、`cityId`、`guideType`、`publishStatu
 
 权限：`voyaai:guide:export`。返回 Excel。
 
+### 4.6 收藏管理
+
+权限前缀：`voyaai:favorite`。网页路径：`/voyaai/favorite`。收藏数据由小程序端写入，管理端只做查询和删除。
+
+#### GET `/voyaai/favorite/list`
+
+权限：`voyaai:favorite:list`。Query：`pageNum`、`pageSize`、`targetType`、`nickname`、`beginCreateTime`、`endCreateTime`。`targetType` 只接受 `city`、`attraction`、`guide`、`trip`，其他值按不筛选处理；时间范围包含首尾两天，`endCreateTime` 当天 23:59:59 的收藏也算在内。返回分页，字段如下。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `id` | Long | 收藏 ID |
+| `userId` | Long | 收藏用户 ID |
+| `nickname` | String | 用户昵称 |
+| `avatarUrl` | String | 用户头像 |
+| `targetType` | String | `city`、`attraction`、`guide`、`trip` |
+| `targetId` | Long | 目标 ID |
+| `targetTitle` | String | 城市名、景点名或攻略标题；行程接口未实现时为 `null` |
+| `targetCoverImage` | String | 目标封面 |
+| `targetSummary` | String | 攻略摘要，其他类型为 `null` |
+| `createTime` | String | 收藏时间，`yyyy-MM-dd HH:mm:ss` |
+
+#### GET `/voyaai/favorite/{id}`
+
+权限：`voyaai:favorite:query`。返回单条收藏，字段同上。
+
+#### DELETE `/voyaai/favorite/{ids}`
+
+权限：`voyaai:favorite:remove`。`ids` 为逗号分隔的收藏 ID，物理删除且不可恢复。删除时同步扣减景点、攻略的收藏量，不做关联校验。
+
 ## 5 已实现小程序接口
 
 ### 5.1 微信登录
@@ -557,6 +586,33 @@ Query：`pageNum`、`pageSize`、`name`、`cityId`、`guideType`、`publishStatu
 
 无需 Token。Query：`type` 可选，攻略页面建议传 `type=guide`。返回数组：`id`、`name`、`type`、`sort`。
 
+### 5.7 收藏
+
+认证：小程序 Token。目标类型统一为 `city`、`attraction`、`guide`、`trip`，其他值返回 `400`。
+
+| 方法 | URL | 用途 |
+|---|---|---|
+| POST | `/app/voyaai/favorites` | 收藏目标 |
+| DELETE | `/app/voyaai/favorites/{targetType}/{targetId}` | 取消收藏 |
+| GET | `/app/voyaai/favorites` | 我的收藏分页 |
+| GET | `/app/voyaai/favorites/{targetType}/{targetId}` | 查询当前用户是否收藏 |
+
+#### POST `/app/voyaai/favorites`
+
+请求：`{"targetType":"guide","targetId":1}`。返回 `id`、`targetType`、`targetId`、`createTime`。重复收藏是幂等成功，返回已有记录，不返回 `409`。城市、景点、攻略被删除或不存在时返回 `404`；行程收藏暂不校验目标是否存在。
+
+#### DELETE `/app/voyaai/favorites/{targetType}/{targetId}`
+
+返回 `code=200`。未收藏该目标时返回 `404`。
+
+#### GET `/app/voyaai/favorites`
+
+Query：`pageNum`、`pageSize`（最大 50）、`targetType` 可选。返回 `data.{rows,total}`，`rows` 每项为 `id`、`targetType`、`targetId`、`targetTitle`、`targetCoverImage`、`targetSummary`、`createTime`，按收藏时间倒序。
+
+#### GET `/app/voyaai/favorites/{targetType}/{targetId}`
+
+返回 `{"favorited":true}`，用于详情页收藏按钮的初始状态。收藏和取消会同步维护景点、攻略的 `favorite_count`。
+
 ## 6 文件上传接口
 
 ### POST `/common/upload`
@@ -585,20 +641,7 @@ Query：`pageNum`、`pageSize`、`name`、`cityId`、`guideType`、`publishStatu
 
 以下接口是后续开发的正式契约。它们对应数据库已有表，但当前代码尚未实现；在后端完成前，前端必须显示“即将上线”或空状态，不能把本地演示数组当作真实业务数据。
 
-### 7.1 收藏
-
-认证：小程序 Token。目标类型统一为 `city`、`attraction`、`guide`、`trip`。
-
-| 方法 | URL | 用途 |
-|---|---|---|
-| POST | `/app/voyaai/favorites` | 收藏目标 |
-| DELETE | `/app/voyaai/favorites/{targetType}/{targetId}` | 取消收藏 |
-| GET | `/app/voyaai/favorites` | 我的收藏分页 |
-| GET | `/app/voyaai/favorites/{targetType}/{targetId}` | 查询当前用户是否收藏 |
-
-新增请求：`{"targetType":"guide","targetId":1}`。列表 Query：`pageNum`、`pageSize`、`targetType`。返回 `id`、`targetType`、`targetId`、`createTime`，并根据类型附带目标摘要。重复收藏返回 `409` 或幂等成功，最终实现必须固定为幂等成功。
-
-### 7.2 点赞
+### 7.1 点赞
 
 认证：小程序 Token。目标类型为 `city`、`attraction`、`guide`、`comment`、`trip`。
 
@@ -610,7 +653,7 @@ Query：`pageNum`、`pageSize`、`name`、`cityId`、`guideType`、`publishStatu
 
 返回：`{"targetType":"guide","targetId":1,"liked":true,"likeCount":13}`。数据库唯一键保证同一用户不能重复点赞。
 
-### 7.3 浏览记录
+### 7.2 浏览记录
 
 公开详情访问可匿名写入浏览日志；用户登录后带上用户 ID。
 
@@ -622,7 +665,7 @@ Query：`pageNum`、`pageSize`、`name`、`cityId`、`guideType`、`publishStatu
 
 记录请求：`{"targetType":"guide","targetId":1}`。服务端从请求读取 IP 和 User-Agent，不允许客户端伪造 `userId`。
 
-### 7.4 评论
+### 7.3 评论
 
 认证：发布、删除需要小程序 Token；公开查询可匿名。
 
@@ -635,7 +678,7 @@ Query：`pageNum`、`pageSize`、`name`、`cityId`、`guideType`、`publishStatu
 
 查询 Query：`targetType`、`targetId`、`pageNum`、`pageSize`。新增 JSON：`targetType`、`targetId`、`parentId`（一级评论传 0）、`content`（最多 1000 字）。返回评论作者、头像、正文、点赞数、创建时间和子回复。
 
-### 7.5 搜索历史
+### 7.4 搜索历史
 
 认证：小程序 Token。
 
@@ -648,7 +691,7 @@ Query：`pageNum`、`pageSize`、`name`、`cityId`、`guideType`、`publishStatu
 
 请求：`{"keyword":"成都攻略"}`，最多 100 字。服务端按用户隔离，建议最多保留最近 20 条。
 
-### 7.6 行程管理
+### 7.5 行程管理
 
 认证：小程序 Token。行程只能由所属用户读取和修改。
 
@@ -701,7 +744,7 @@ JSON：`dayNumber`、`date`、`title`、`description`。同一行程的 `dayNumb
 
 JSON：`attractionId` 可空、`itemType`（1 景点、2 餐饮、3 酒店、4 交通、5 购物、6 其他）、`title`、`startTime`、`endTime`、`address`、`description`、`estimatedCost`、`sort`。
 
-### 7.7 行程分享
+### 7.6 行程分享
 
 认证：小程序 Token。
 
@@ -713,7 +756,7 @@ JSON：`attractionId` 可空、`itemType`（1 景点、2 餐饮、3 酒店、4 �
 
 创建返回 `shareCode`、`shareToken`、`expireTime`、`url`。分享查看只返回公开行程数据，不返回用户隐私。
 
-### 7.8 AI 助手
+### 7.7 AI 助手
 
 当前模型服务和密钥尚未确定，所以此模块暂未实现。推荐先固定以下契约，模型调用全部放在后端，密钥只放环境变量。
 
@@ -728,7 +771,7 @@ JSON：`attractionId` 可空、`itemType`（1 景点、2 餐饮、3 酒店、4 �
 
 生成行程请求建议：`cityId`、`days`、`budget`、`peopleCount`、`travelType`、`preferences[]`。返回草案时使用与行程模块相同的 `days/items` 结构，确认时后端重新校验景点和城市，不能直接信任模型返回的 ID。
 
-### 7.9 酒店和美食
+### 7.8 酒店和美食
 
 当前没有酒店和美食表，也没有第三方数据源，页面是视觉壳。正式开发前要先确定数据来源。推荐接口：
 
@@ -741,7 +784,7 @@ GET /app/voyaai/foods/{id}
 
 列表统一返回 `data.rows/data.total`，详情返回 `data`。价格、地址、图片、评分、经纬度和营业时间必须在后端统一字段后再接入小程序。
 
-### 7.10 消息通知
+### 7.9 消息通知
 
 数据库表已经存在，接口尚未实现：
 
@@ -754,7 +797,7 @@ DELETE /app/voyaai/messages/{id}
 
 消息返回 `id`、`type`、`title`、`content`、`bizType`、`bizId`、`isRead`、`readTime`、`createTime`。用户只能访问自己的消息。
 
-### 7.11 标签管理
+### 7.10 标签管理
 
 小程序的 `GET /app/voyaai/tags` 已实现，但标签的管理端 CRUD 尚未实现。攻略管理页面当前只能选择数据库中已经存在的启用标签。后续管理员接口固定为：
 
@@ -769,7 +812,7 @@ DELETE /voyaai/tag/{ids}
 
 权限前缀为 `voyaai:tag`。新增 JSON：`{"name":"美食","type":"guide","sort":10,"status":"0","remark":""}`。同一 `type` 下标签名称不能重复；删除标签前需要检查 `voya_ai_guide_tag` 关联，存在关联时返回 `409`。管理端列表返回 `id`、`name`、`type`、`sort`、`status`、`remark`、审计字段。
 
-### 7.12 意见反馈
+### 7.11 意见反馈
 
 小程序：
 
@@ -796,11 +839,11 @@ POST /app/voyaai/feedback
 
 ### 已完成阶段
 
-国家、 province、城市、景点的管理端 CRUD 和小程序公开浏览已经完成；微信登录、用户资料和头像已经完成；攻略管理和攻略公开读接口已经完成。
+国家、省份、城市、景点的管理端 CRUD 和小程序公开浏览已经完成；微信登录、用户资料和头像已经完成；攻略管理和攻略公开读接口已经完成；收藏模块的管理端查询删除、小程序收藏、取消、状态查询和收藏量维护已经完成。
 
 ### 下一阶段
 
-1. 收藏和点赞：先做通用目标模型，接入景点、攻略详情页。
+1. 点赞：复用收藏的通用目标模型，接入景点、攻略详情页和小程序用户列表。
 2. 浏览记录和搜索历史：接入详情页和搜索页。
 3. 评论：先做公开列表和用户发布，再做管理端审核。
 4. 行程：完成主表、天、项的事务性 CRUD。
@@ -828,7 +871,8 @@ POST /app/voyaai/feedback
 | `/voyaai/province` | 省份管理 | 已实现 | `/voyaai/province/**` |
 | `/voyaai/city` | 城市管理 | 已实现 | `/voyaai/city/**` |
 | `/voyaai/attraction` | 景点管理 | 已实现 | `/voyaai/attraction/**` |
-| `/voyaai/guide` | 攻略管理 | 前端工作区已有，需提交并联调 | `/voyaai/guide/**` |
+| `/voyaai/guide` | 攻略管理 | 已实现 | `/voyaai/guide/**` |
+| `/voyaai/favorite` | 收藏管理 | 已实现 | `/voyaai/favorite/**` |
 | `/voyaai/tag` | 标签管理 | 规划中 | `/voyaai/tag/**` |
 | `/voyaai/feedback` | 意见反馈 | 规划中 | `/voyaai/feedback/**` |
 
@@ -850,7 +894,7 @@ POST /app/voyaai/feedback
 | `pages/hotels` | 视觉壳 | 酒店接口规划中 |
 | `pages/food` | 视觉壳 | 美食接口规划中 |
 | `pages/messages` | 视觉壳 | 消息接口规划中 |
-| `pages/more` | 视觉壳 | 收藏、历史、反馈接口规划中 |
+| `pages/more` | 收藏接口已实现，小程序页面待接入 | `/app/voyaai/favorites`、`/app/voyaai/favorites/{targetType}/{targetId}` |
 
 ## 11 当前代码和文档位置
 
@@ -858,6 +902,7 @@ POST /app/voyaai/feedback
 网页前端：`D:/VoyaAI/RuoYi-Vue3`  
 微信小程序：`D:/VoyaAI/VoyaAI-app`  
 攻略后端详细文档：后端仓库 `docs/voyaai-guide-api.md`  
-攻略数据库脚本：后端仓库 `sql/voyaai_guide_schema.sql`、`sql/voyaai_guide_menu.sql`
+攻略数据库脚本：后端仓库 `sql/voyaai_guide_schema.sql`、`sql/voyaai_guide_menu.sql`  
+收藏菜单脚本：后端仓库 `sql/voyaai_favorite_menu.sql`
 
 本文档是项目级接口总规范；模块细节可以在对应仓库文档中补充，但不得与本文档的 URL、字段名称、响应包装和状态码冲突。
