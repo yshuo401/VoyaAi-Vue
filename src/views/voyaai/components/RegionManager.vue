@@ -1,7 +1,10 @@
 <template>
   <div class="app-container region-page">
     <div class="page-heading">
-      <div><h2>{{ label }}管理</h2><p>{{ headingDescription }}</p></div>
+      <div>
+        <h2>{{ label }}管理</h2>
+        <p>{{ headingDescription }}</p>
+      </div>
       <el-tag effect="plain">基础资料</el-tag>
     </div>
 
@@ -25,7 +28,8 @@
         </el-select>
       </el-form-item>
       <el-form-item label="创建时间">
-        <el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期" end-placeholder="结束日期" />
+        <el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期"
+          end-placeholder="结束日期" />
       </el-form-item>
       <el-form-item>
         <el-button type="primary" icon="Search" @click="search">搜索</el-button>
@@ -34,9 +38,12 @@
     </el-form>
 
     <el-row :gutter="10" class="mb8">
-      <el-col :span="1.5"><el-button v-hasPermi="[permission('add')]" type="primary" icon="Plus" @click="openCreate">新增{{ label }}</el-button></el-col>
-      <el-col :span="1.5"><el-button v-hasPermi="[permission('remove')]" plain type="danger" icon="Delete" :disabled="!selection.length" @click="remove(selection)">批量删除</el-button></el-col>
-      <el-col v-if="isCity" :span="1.5"><el-button v-hasPermi="[permission('export')]" plain icon="Download" @click="exportCities">导出</el-button></el-col>
+      <el-col :span="1.5"><el-button v-hasPermi="[permission('add')]" type="primary" icon="Plus"
+          @click="openCreate">新增{{ label }}</el-button></el-col>
+      <el-col :span="1.5"><el-button v-hasPermi="[permission('remove')]" plain type="danger" icon="Delete"
+          :disabled="!selection.length" @click="remove(selection)">批量删除</el-button></el-col>
+      <el-col v-if="isCity" :span="1.5"><el-button v-hasPermi="[permission('export')]" plain icon="Download"
+          @click="exportCities">导出</el-button></el-col>
       <right-toolbar v-model:showSearch="showSearch" @queryTable="loadList" />
     </el-row>
     <el-alert v-if="listError" :title="listError" type="error" :closable="false" show-icon class="mb8" />
@@ -44,7 +51,8 @@
       <el-table-column type="selection" width="48" />
       <el-table-column prop="id" label="ID" width="80" />
       <el-table-column v-if="isCity" label="封面" width="90">
-        <template #default="{ row }"><image-preview v-if="row.coverImage" :src="row.coverImage" :width="60" :height="40" /><span v-else>—</span></template>
+        <template #default="{ row }"><image-preview v-if="row.coverImage" :src="row.coverImage" :width="60"
+            :height="40" /><span v-else>—</span></template>
       </el-table-column>
       <el-table-column prop="name" :label="`${label}名称`" min-width="130" />
       <el-table-column v-if="hasCountry" prop="countryName" label="国家" min-width="100" />
@@ -52,54 +60,76 @@
       <el-table-column v-if="!isCity" prop="code" label="编码" min-width="100" />
       <el-table-column v-if="isCity" prop="viewCount" label="浏览量" width="100" />
       <el-table-column prop="sort" label="排序" width="80" />
-      <el-table-column label="状态" width="95"><template #default="{ row }"><dict-tag :options="sys_normal_disable" :value="row.status" /></template></el-table-column>
-      <el-table-column label="创建时间" width="170"><template #default="{ row }">{{ parseTime(row.createTime) }}</template></el-table-column>
+      <el-table-column label="状态" width="95"><template #default="{ row }"><dict-tag :options="sys_normal_disable"
+            :value="row.status" /></template></el-table-column>
+      <el-table-column label="创建时间" width="170"><template #default="{ row }">{{ parseTime(row.createTime)
+          }}</template></el-table-column>
       <el-table-column label="操作" width="240" fixed="right">
         <template #default="{ row }">
           <el-button v-hasPermi="[permission('query')]" link type="primary" @click="showDetail(row)">查看</el-button>
           <el-button v-hasPermi="[permission('edit')]" link type="primary" @click="openEdit(row)">编辑</el-button>
           <el-dropdown v-hasPermi="[permission('edit')]" @command="value => changeStatus(row, value)">
             <el-button link type="primary">状态</el-button>
-            <template #dropdown><el-dropdown-menu><el-dropdown-item v-for="item in sys_normal_disable" :key="item.value" :command="item.value" :disabled="row.status === item.value">{{ item.label }}</el-dropdown-item></el-dropdown-menu></template>
+            <template #dropdown><el-dropdown-menu><el-dropdown-item v-for="item in sys_normal_disable" :key="item.value"
+                  :command="item.value" :disabled="row.status === item.value">{{ item.label
+                  }}</el-dropdown-item></el-dropdown-menu></template>
           </el-dropdown>
           <el-button v-hasPermi="[permission('remove')]" link type="danger" @click="remove([row])">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
-    <pagination v-show="total > 0" v-model:page="query.pageNum" v-model:limit="query.pageSize" :total="total" :page-sizes="[10, 20, 50, 100]" @pagination="loadList" />
+    <pagination v-show="total > 0" v-model:page="query.pageNum" v-model:limit="query.pageSize" :total="total"
+      :page-sizes="[10, 20, 50, 100]" @pagination="loadList" />
 
-    <el-dialog v-model="dialogOpen" :title="`${form.id ? '编辑' : '新增'}${label}`" width="680px" :close-on-click-modal="false" append-to-body>
+    <el-dialog v-model="dialogOpen" :title="`${form.id ? '编辑' : '新增'}${label}`" width="680px"
+      :close-on-click-modal="false" append-to-body>
       <el-alert v-if="optionError" :title="optionError" type="error" :closable="false" class="mb8" />
       <el-form ref="formRef" :model="form" :rules="rules" label-width="96px">
         <h3>基本信息</h3>
-        <el-form-item prop="name" :label="`${label}名称`"><el-input v-model="form.name" maxlength="100" show-word-limit /></el-form-item>
+        <el-form-item prop="name" :label="`${label}名称`"><el-input v-model="form.name" maxlength="100"
+            show-word-limit /></el-form-item>
         <el-form-item v-if="hasCountry" prop="countryId" label="国家">
           <el-select v-model="form.countryId" filterable placeholder="请选择国家" @change="changeFormCountry">
-            <el-option v-for="item in countries" :key="item.id" :value="item.id" :label="item.name" :disabled="item.status !== '0'" />
+            <el-option v-for="item in countries" :key="item.id" :value="item.id" :label="item.name"
+              :disabled="item.status !== '0'" />
           </el-select>
         </el-form-item>
         <el-form-item v-if="isCity" prop="provinceId" label="省份">
-          <el-select v-model="form.provinceId" filterable :disabled="!form.countryId || provincesLoading" :loading="provincesLoading" placeholder="请选择省份">
-            <el-option v-for="item in formProvinces" :key="item.id" :value="item.id" :label="item.name" :disabled="item.status !== '0'" />
+          <el-select v-model="form.provinceId" filterable :disabled="!form.countryId || provincesLoading"
+            :loading="provincesLoading" placeholder="请选择省份">
+            <el-option v-for="item in formProvinces" :key="item.id" :value="item.id" :label="item.name"
+              :disabled="item.status !== '0'" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="!isCity" prop="code" :label="`${label}编码`"><el-input v-model="form.code" maxlength="20" placeholder="选填" /></el-form-item>
+        <el-form-item v-if="!isCity" prop="code" :label="`${label}编码`"><el-input v-model="form.code" maxlength="20"
+            placeholder="选填" /></el-form-item>
         <template v-if="isCity">
           <h3>城市展示</h3>
-          <el-form-item prop="coverImage" label="封面"><image-upload v-model="form.coverImage" :limit="1" /><div class="field-help">建议尺寸 800 × 450，支持 JPG / PNG，最大 5MB。</div></el-form-item>
-          <el-form-item prop="description" label="简介"><el-input v-model="form.description" type="textarea" :rows="4" maxlength="10000" show-word-limit /></el-form-item>
+          <el-form-item prop="coverImage" label="封面"><image-upload v-model="form.coverImage" :limit="1" />
+            <div class="field-help">建议尺寸 800 × 450，支持 JPG / PNG，最大 5MB。</div>
+          </el-form-item>
+          <el-form-item prop="description" label="简介"><el-input v-model="form.description" type="textarea" :rows="4"
+              maxlength="10000" show-word-limit /></el-form-item>
           <h3>地理位置</h3>
           <el-row :gutter="16">
-            <el-col :span="12"><el-form-item prop="latitude" label="纬度"><el-input-number v-model="form.latitude" :min="-90" :max="90" :precision="7" :controls="false" /></el-form-item></el-col>
-            <el-col :span="12"><el-form-item prop="longitude" label="经度"><el-input-number v-model="form.longitude" :min="-180" :max="180" :precision="7" :controls="false" /></el-form-item></el-col>
+            <el-col :span="12"><el-form-item prop="latitude" label="纬度"><el-input-number v-model="form.latitude"
+                  :min="-90" :max="90" :precision="7" :controls="false" /></el-form-item></el-col>
+            <el-col :span="12"><el-form-item prop="longitude" label="经度"><el-input-number v-model="form.longitude"
+                  :min="-180" :max="180" :precision="7" :controls="false" /></el-form-item></el-col>
           </el-row>
         </template>
         <h3>展示设置</h3>
-        <el-form-item prop="sort" label="排序"><el-input-number v-model="form.sort" :min="0" :max="2147483647" :precision="0" /><span class="field-help">数值越大越靠前</span></el-form-item>
-        <el-form-item prop="status" label="状态"><el-radio-group v-model="form.status"><el-radio v-for="item in sys_normal_disable" :key="item.value" :value="item.value">{{ item.label }}</el-radio></el-radio-group></el-form-item>
-        <el-form-item prop="remark" label="备注"><el-input v-model="form.remark" type="textarea" maxlength="500" show-word-limit /></el-form-item>
+        <el-form-item prop="sort" label="排序"><el-input-number v-model="form.sort" :min="0" :max="2147483647"
+            :precision="0" /><span class="field-help">数值越大越靠前</span></el-form-item>
+        <el-form-item prop="status" label="状态"><el-radio-group v-model="form.status"><el-radio
+              v-for="item in sys_normal_disable" :key="item.value" :value="item.value">{{ item.label
+              }}</el-radio></el-radio-group></el-form-item>
+        <el-form-item prop="remark" label="备注"><el-input v-model="form.remark" type="textarea" maxlength="500"
+            show-word-limit /></el-form-item>
       </el-form>
-      <template #footer><el-button @click="dialogOpen = false" :disabled="saving">取消</el-button><el-button type="primary" :loading="saving" :disabled="provincesLoading || !!optionError" @click="save">保存</el-button></template>
+      <template #footer><el-button @click="dialogOpen = false" :disabled="saving">取消</el-button><el-button
+          type="primary" :loading="saving" :disabled="provincesLoading || !!optionError"
+          @click="save">保存</el-button></template>
     </el-dialog>
 
     <el-drawer v-model="detailOpen" :title="`${label}详情`" size="520px">
@@ -110,11 +140,14 @@
           <el-descriptions-item v-if="hasCountry" label="国家">{{ detail.countryName }}</el-descriptions-item>
           <el-descriptions-item v-if="isCity" label="省份">{{ detail.provinceName }}</el-descriptions-item>
           <el-descriptions-item v-if="!isCity" label="编码">{{ detail.code || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="状态"><dict-tag :options="sys_normal_disable" :value="detail.status" /></el-descriptions-item>
+          <el-descriptions-item label="状态"><dict-tag :options="sys_normal_disable"
+              :value="detail.status" /></el-descriptions-item>
           <el-descriptions-item label="排序">{{ detail.sort }}</el-descriptions-item>
           <el-descriptions-item v-if="isCity" label="浏览量">{{ detail.viewCount }}</el-descriptions-item>
-          <el-descriptions-item v-if="isCity" label="经纬度">{{ detail.longitude ?? '—' }} / {{ detail.latitude ?? '—' }}</el-descriptions-item>
-          <el-descriptions-item v-if="isCity" label="简介"><span class="description">{{ detail.description || '—' }}</span></el-descriptions-item>
+          <el-descriptions-item v-if="isCity" label="经纬度">{{ detail.longitude ?? '—' }} / {{ detail.latitude ?? '—'
+            }}</el-descriptions-item>
+          <el-descriptions-item v-if="isCity" label="简介"><span class="description">{{ detail.description || '—'
+              }}</span></el-descriptions-item>
           <el-descriptions-item label="创建人">{{ detail.createBy }}</el-descriptions-item>
           <el-descriptions-item label="创建时间">{{ parseTime(detail.createTime) }}</el-descriptions-item>
           <el-descriptions-item label="修改人">{{ detail.updateBy }}</el-descriptions-item>
@@ -306,16 +339,66 @@ loadCountries().catch(() => { listError.value = '国家选项加载失败，请�
 </script>
 
 <style scoped>
-.page-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; }
-.page-heading h2 { margin: 0 0 8px; font-size: 22px; color: var(--el-text-color-primary); }
-.page-heading p, .field-help { color: var(--el-text-color-secondary); font-size: 13px; }
-.page-heading p { margin: 0; }
-.search-form { padding: 18px 18px 0; margin-bottom: 18px; background: var(--el-fill-color-light); border-radius: 6px; }
-.search-form .el-select { width: 180px; }
-.search-form .el-input { width: 190px; }
-h3 { font-size: 14px; border-left: 3px solid var(--el-color-primary); padding-left: 10px; margin: 20px 0; }
-.field-help { margin-left: 8px; }
-.el-dropdown { margin: 0 10px; vertical-align: middle; }
-.detail-info { margin-top: 20px; }
-.description { white-space: pre-wrap; overflow-wrap: anywhere; }
+.page-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+
+.page-heading h2 {
+  margin: 0 0 8px;
+  font-size: 22px;
+  color: var(--el-text-color-primary);
+}
+
+.page-heading p,
+.field-help {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+.page-heading p {
+  margin: 0;
+}
+
+.search-form {
+  padding: 18px 18px 0;
+  margin-bottom: 18px;
+  background: var(--el-fill-color-light);
+  border-radius: 6px;
+}
+
+.search-form .el-select {
+  width: 180px;
+}
+
+.search-form .el-input {
+  width: 190px;
+}
+
+h3 {
+  font-size: 14px;
+  border-left: 3px solid var(--el-color-primary);
+  padding-left: 10px;
+  margin: 20px 0;
+}
+
+.field-help {
+  margin-left: 8px;
+}
+
+.el-dropdown {
+  margin: 0 10px;
+  vertical-align: middle;
+}
+
+.detail-info {
+  margin-top: 20px;
+}
+
+.description {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 </style>

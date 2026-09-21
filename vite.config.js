@@ -44,6 +44,7 @@ export default defineConfig(({ mode, command }) => {
     server: {
       port: 80,
       host: true,
+      allowedHosts: ['.cpolar.cn'], // 允许所有 cpolar 的子域名
       open: true,
       proxy: {
         // https://cn.vitejs.dev/config/#server-proxy
