@@ -1,6 +1,6 @@
 # VoyaAi 旅游管理系统从零到一接口契约
 
-版本：V1.6  
+版本：V1.7  
 编写日期：2026-09-21  
 适用项目：VoyaAi 后端、RuoYi-Vue3 管理端、VoyaAI-app 微信小程序
 
@@ -123,7 +123,7 @@ Authorization: Bearer va_<43位URL安全随机字符>
 
 | 表 | 用途 | 当前后端状态 |
 |---|---|---|
-| `voya_ai_user` | 微信小程序用户 | 已实现登录、资料和头像 |
+| `voya_ai_user` | 微信小程序用户 | 已实现登录、资料、头像和管理端查询、状态管理 |
 | `voya_ai_country` | 国家 | 已实现 |
 | `voya_ai_province` | 省份 | 已实现 |
 | `voya_ai_city` | 城市 | 已实现 |
@@ -578,6 +578,22 @@ Query：`pageNum`、`pageSize`、`name`、`cityId`、`guideType`、`publishStatu
 
 标签表唯一键 `uk_tag_name_type` 不包含删除标志，因此已删除标签仍占用其名称，重名会返回 `409`。表缺少的 `create_by`、`update_by` 两列由 `sql/voyaai_tag_schema.sql` 幂等补齐。
 
+### 4.12 用户管理
+
+权限前缀：`voyaai:user`。网页路径：`/voyaai/user`。用户由微信登录自动注册，管理端只做查询和状态管理，不提供新增和删除。
+
+#### GET `/voyaai/user/list`
+
+权限：`voyaai:user:list`。Query：`pageNum`、`pageSize`、`nickname`、`status`、`beginCreateTime`、`endCreateTime`。`nickname` 按模糊匹配，`status` 为 `0` 启用、`1` 停用。返回分页字段：`id`、`nickname`、`avatarUrl`、`status`、`createTime`、`lastLoginTime`、`updateTime`。不返回 OpenID、UnionID、手机号等隐私字段。
+
+#### GET `/voyaai/user/{id}`
+
+权限：`voyaai:user:query`。返回单个用户，字段同上；用户不存在或已注销返回 `404`。
+
+#### PUT `/voyaai/user/changeStatus`
+
+权限：`voyaai:user:edit`。请求：`{"id":1,"status":"1"}`，状态必须为 `0` 或 `1`。停用后立即生效：该用户无法再次登录，已有小程序会话在下次请求时自动失效；重新启用后恢复。
+
 ## 5 已实现小程序接口
 
 ### 5.1 微信登录
@@ -982,7 +998,7 @@ POST /app/voyaai/feedback
 
 ### 已完成阶段
 
-国家、省份、城市、景点的管理端 CRUD 和小程序公开浏览已经完成；微信登录、用户资料和头像已经完成；攻略管理和攻略公开读接口已经完成；收藏和点赞模块的管理端查询删除、小程序收藏、点赞、取消、状态查询和计数维护已经完成；浏览记录的匿名写入、登录用户历史查询和清空、管理端查询已经完成；搜索历史的小程序保存、去重、保留 20 条、查询、删除和清空，以及管理端查询删除已经完成；评论的小程序查询、发表、回复、删除、点赞和管理端查询、删除已经完成；标签的管理端 CRUD、状态切换、关联保护删除和小程序公开读取已经完成。
+国家、省份、城市、景点的管理端 CRUD 和小程序公开浏览已经完成；微信登录、用户资料和头像已经完成；攻略管理和攻略公开读接口已经完成；收藏和点赞模块的管理端查询删除、小程序收藏、点赞、取消、状态查询和计数维护已经完成；浏览记录的匿名写入、登录用户历史查询和清空、管理端查询已经完成；搜索历史的小程序保存、去重、保留 20 条、查询、删除和清空，以及管理端查询删除已经完成；评论的小程序查询、发表、回复、删除、点赞和管理端查询、删除已经完成；标签的管理端 CRUD、状态切换、关联保护删除和小程序公开读取已经完成；用户管理端查询和状态管理已经完成。
 
 ### 下一阶段
 
@@ -1019,6 +1035,7 @@ POST /app/voyaai/feedback
 | `/voyaai/searchHistory` | 搜索历史 | 已实现 | `/voyaai/searchHistory/**` |
 | `/voyaai/comment` | 评论管理 | 已实现 | `/voyaai/comment/**` |
 | `/voyaai/tag` | 标签管理 | 已实现 | `/voyaai/tag/**` |
+| `/voyaai/user` | 用户管理 | 已实现 | `/voyaai/user/**` |
 | `/voyaai/feedback` | 意见反馈 | 规划中 | `/voyaai/feedback/**` |
 
 ### 10.2 微信小程序页面
@@ -1058,5 +1075,6 @@ POST /app/voyaai/feedback
 搜索历史菜单脚本：后端仓库 `sql/voyaai_search_history_menu.sql`
 评论菜单脚本：后端仓库 `sql/voyaai_comment_menu.sql`、`sql/voyaai_comment_schema.sql`
 标签菜单和字段脚本：后端仓库 `sql/voyaai_tag_menu.sql`、`sql/voyaai_tag_schema.sql`
+用户管理菜单脚本：后端仓库 `sql/voyaai_user_menu.sql`
 
 本文档是项目级接口总规范；模块细节可以在对应仓库文档中补充，但不得与本文档的 URL、字段名称、响应包装和状态码冲突。
