@@ -1,6 +1,6 @@
 # VoyaAi 旅游管理系统从零到一接口契约
 
-版本：V1.4  
+版本：V1.5  
 编写日期：2026-09-21  
 适用项目：VoyaAi 后端、RuoYi-Vue3 管理端、VoyaAI-app 微信小程序
 
@@ -134,7 +134,7 @@ Authorization: Bearer va_<43位URL安全随机字符>
 | `voya_ai_guide_tag` | 攻略标签关联 | 已接入攻略新增、修改和详情 |
 | `voya_ai_favorite` | 收藏 | 已实现小程序收藏、取消、状态查询和管理端查询、删除 |
 | `voya_ai_like` | 点赞 | 已实现小程序景点、攻略点赞、取消、状态查询和管理端查询、删除 |
-| `voya_ai_comment` | 评论 | 数据表已有，接口规划中 |
+| `voya_ai_comment` | 评论 | 已实现小程序评论、回复、删除、点赞和管理端查询、删除 |
 | `voya_ai_view_log` | 浏览记录 | 已实现匿名浏览记录、登录用户历史查询和清空、管理端查询 |
 | `voya_ai_search_history` | 搜索历史 | 已实现小程序保存、去重、查询、删除、清空和管理端查询、删除 |
 | `voya_ai_trip` | 行程主表 | 数据表已有，接口规划中 |
@@ -474,7 +474,7 @@ Query：`pageNum`、`pageSize`、`name`、`cityId`、`guideType`、`publishStatu
 
 #### GET `/voyaai/like/list`
 
-权限：`voyaai:like:list`。Query：`pageNum`、`pageSize`、`targetType`、`nickname`、`beginCreateTime`、`endCreateTime`。`targetType` 只接受 `attraction`、`guide`，其他值按不筛选处理；时间范围包含首尾两天。返回分页，字段如下。
+权限：`voyaai:like:list`。Query：`pageNum`、`pageSize`、`targetType`、`nickname`、`beginCreateTime`、`endCreateTime`。`targetType` 只接受 `attraction`、`guide`、`comment`，其他值按不筛选处理；时间范围包含首尾两天。返回分页，字段如下。
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
@@ -482,11 +482,11 @@ Query：`pageNum`、`pageSize`、`name`、`cityId`、`guideType`、`publishStatu
 | `userId` | Long | 点赞用户 ID |
 | `nickname` | String | 用户昵称 |
 | `avatarUrl` | String | 用户头像 |
-| `targetType` | String | `attraction`、`guide` |
+| `targetType` | String | `attraction`、`guide`、`comment` |
 | `targetId` | Long | 目标 ID |
-| `targetTitle` | String | 景点名或攻略标题 |
+| `targetTitle` | String | 景点名、攻略标题或评论内容 |
 | `targetCoverImage` | String | 目标封面 |
-| `targetSummary` | String | 攻略摘要，景点为 `null` |
+| `targetSummary` | String | 攻略摘要，其他类型为 `null` |
 | `createTime` | String | 点赞时间，`yyyy-MM-dd HH:mm:ss` |
 
 一行点赞记录代表该用户当前点赞了该目标，取消点赞会删除记录，因此列表不返回点赞状态字段。
@@ -497,7 +497,7 @@ Query：`pageNum`、`pageSize`、`name`、`cityId`、`guideType`、`publishStatu
 
 #### DELETE `/voyaai/like/{ids}`
 
-权限：`voyaai:like:remove`。`ids` 为逗号分隔的点赞 ID，物理删除且不可恢复，同时扣减景点、攻略的点赞量。
+权限：`voyaai:like:remove`。`ids` 为逗号分隔的点赞 ID，物理删除且不可恢复，同时扣减对应景点、攻略或评论的点赞量。
 
 ### 4.8 浏览记录
 
@@ -526,6 +526,22 @@ Query：`pageNum`、`pageSize`、`name`、`cityId`、`guideType`、`publishStatu
 #### DELETE `/voyaai/searchHistory/{ids}`
 
 权限：`voyaai:searchHistory:remove`。`ids` 为逗号分隔的记录 ID，物理删除且不可恢复。
+
+### 4.10 评论管理
+
+权限前缀：`voyaai:comment`。网页路径：`/voyaai/comment`。评论由小程序端写入，管理端做查询和删除；`status` 审核字段暂未启用，后续隐藏/恢复接口规划中。
+
+#### GET `/voyaai/comment/list`
+
+权限：`voyaai:comment:list`。Query：`pageNum`、`pageSize`、`targetType`、`nickname`、`keyword`、`parentId`、`parentIdNotZero`、`beginCreateTime`、`endCreateTime`。`targetType` 只接受 `attraction`、`guide`，其他值按不筛选处理；`keyword` 匹配评论内容；`parentId=0` 只查一级评论，`parentIdNotZero=true` 只查回复；时间范围包含首尾两天。返回分页字段：`id`、`userId`、`nickname`、`avatarUrl`、`targetType`、`targetId`、`targetTitle`、`parentId`、`parentNickname`、`parentContent`、`content`、`likeCount`、`createTime`。
+
+#### GET `/voyaai/comment/{id}`
+
+权限：`voyaai:comment:query`。返回单条评论，字段同上。
+
+#### DELETE `/voyaai/comment/{ids}`
+
+权限：`voyaai:comment:remove`。`ids` 为逗号分隔的评论 ID，逻辑删除且不可恢复。删除一级评论时其下回复一并逻辑删除，并同步扣减景点、攻略的 `comment_count`。
 
 ## 5 已实现小程序接口
 
@@ -674,7 +690,7 @@ Query：`pageNum`、`pageSize`（最大 50）、`targetType` 可选。返回 `da
 
 ### 5.8 点赞
 
-认证：小程序 Token。目标类型只支持 `attraction` 和 `guide`，其他类型返回 `400`。小程序暂时只给景点和攻略提供点赞入口，城市、行程和评论没有点赞计数字段。
+认证：小程序 Token。通用接口支持 `attraction`、`guide`、`comment`，其他类型返回 `400`。小程序给评论点赞应使用 `/app/voyaai/comments/{id}/like`，两个入口都会同步维护对应点赞计数。
 
 | 方法 | URL | 用途 |
 |---|---|---|
@@ -743,6 +759,33 @@ Query：`pageNum`、`pageSize`（最大 50）、`targetType` 可选。返回 `da
 
 删除指定记录。`id` 不存在或属于其他用户时，为了不泄露他人数据，同样返回 `code=200`。
 
+### 5.11 评论
+
+公开查询可匿名；发表、删除和点赞需要小程序 Token。目标类型只支持 `attraction`、`guide`，其他类型返回 `400`。
+
+| 方法 | URL | 用途 |
+|---|---|---|
+| GET | `/app/voyaai/comments` | 查询目标评论 |
+| POST | `/app/voyaai/comments` | 发表评论或回复 |
+| DELETE | `/app/voyaai/comments/{id}` | 删除自己的评论 |
+| POST | `/app/voyaai/comments/{id}/like` | 评论点赞或取消 |
+
+#### GET `/app/voyaai/comments`
+
+无需 Token。Query：`targetType`、`targetId`、`pageNum`、`pageSize`（最大 50，自动修正）。返回 `data.{rows,total}`。`rows` 是一级评论，按创建时间倒序，每项为 `id`、`userId`、`nickname`、`avatarUrl`、`content`、`likeCount`、`createTime`，并嵌套 `replies` 数组（按时间正序）。已登录用户返回每条评论的 `liked` 状态，匿名用户该字段为 `null`。
+
+#### POST `/app/voyaai/comments`
+
+需要小程序 Token。请求：`{"targetType":"attraction","targetId":1,"parentId":0,"content":"值得一去"}`。`parentId` 为 `0` 时发表一级评论，大于 `0` 时回复一级评论，不支持回复再回复。内容去掉首尾空格后最多 1000 字，为空返回 `400`；目标、父评论不存在或已删除返回 `404`。成功返回该条评论 VO。评论和回复都会使景点、攻略的 `comment_count` 加一。
+
+#### DELETE `/app/voyaai/comments/{id}`
+
+需要小程序 Token。只能删除自己的评论，否则返回 `403`；不存在或已删除返回 `404`。删除一级评论时其回复一并删除，并同步扣减 `comment_count`。
+
+#### POST `/app/voyaai/comments/{id}/like`
+
+需要小程序 Token。已点赞则取消，未点赞则点赞。返回 `{"liked":true,"likeCount":13}`，评论表的 `like_count` 同步维护；评论不存在或已删除返回 `404`。
+
 ## 6 文件上传接口
 
 ### POST `/common/upload`
@@ -771,20 +814,7 @@ Query：`pageNum`、`pageSize`（最大 50）、`targetType` 可选。返回 `da
 
 以下接口是后续开发的正式契约。它们对应数据库已有表，但当前代码尚未实现；在后端完成前，前端必须显示“即将上线”或空状态，不能把本地演示数组当作真实业务数据。
 
-### 7.1 评论
-
-认证：发布、删除需要小程序 Token；公开查询可匿名。
-
-| 方法 | URL | 用途 |
-|---|---|---|
-| GET | `/app/voyaai/comments` | 查询目标评论 |
-| POST | `/app/voyaai/comments` | 发表评论或回复 |
-| DELETE | `/app/voyaai/comments/{id}` | 删除自己的评论 |
-| POST | `/app/voyaai/comments/{id}/like` | 评论点赞 |
-
-查询 Query：`targetType`、`targetId`、`pageNum`、`pageSize`。新增 JSON：`targetType`、`targetId`、`parentId`（一级评论传 0）、`content`（最多 1000 字）。返回评论作者、头像、正文、点赞数、创建时间和子回复。
-
-### 7.2 行程管理
+### 7.1 行程管理
 
 认证：小程序 Token。行程只能由所属用户读取和修改。
 
@@ -837,7 +867,7 @@ JSON：`dayNumber`、`date`、`title`、`description`。同一行程的 `dayNumb
 
 JSON：`attractionId` 可空、`itemType`（1 景点、2 餐饮、3 酒店、4 交通、5 购物、6 其他）、`title`、`startTime`、`endTime`、`address`、`description`、`estimatedCost`、`sort`。
 
-### 7.3 行程分享
+### 7.2 行程分享
 
 认证：小程序 Token。
 
@@ -849,7 +879,7 @@ JSON：`attractionId` 可空、`itemType`（1 景点、2 餐饮、3 酒店、4 �
 
 创建返回 `shareCode`、`shareToken`、`expireTime`、`url`。分享查看只返回公开行程数据，不返回用户隐私。
 
-### 7.4 AI 助手
+### 7.3 AI 助手
 
 当前模型服务和密钥尚未确定，所以此模块暂未实现。推荐先固定以下契约，模型调用全部放在后端，密钥只放环境变量。
 
@@ -864,7 +894,7 @@ JSON：`attractionId` 可空、`itemType`（1 景点、2 餐饮、3 酒店、4 �
 
 生成行程请求建议：`cityId`、`days`、`budget`、`peopleCount`、`travelType`、`preferences[]`。返回草案时使用与行程模块相同的 `days/items` 结构，确认时后端重新校验景点和城市，不能直接信任模型返回的 ID。
 
-### 7.5 酒店和美食
+### 7.4 酒店和美食
 
 当前没有酒店和美食表，也没有第三方数据源，页面是视觉壳。正式开发前要先确定数据来源。推荐接口：
 
@@ -877,7 +907,7 @@ GET /app/voyaai/foods/{id}
 
 列表统一返回 `data.rows/data.total`，详情返回 `data`。价格、地址、图片、评分、经纬度和营业时间必须在后端统一字段后再接入小程序。
 
-### 7.6 消息通知
+### 7.5 消息通知
 
 数据库表已经存在，接口尚未实现：
 
@@ -890,7 +920,7 @@ DELETE /app/voyaai/messages/{id}
 
 消息返回 `id`、`type`、`title`、`content`、`bizType`、`bizId`、`isRead`、`readTime`、`createTime`。用户只能访问自己的消息。
 
-### 7.7 标签管理
+### 7.6 标签管理
 
 小程序的 `GET /app/voyaai/tags` 已实现，但标签的管理端 CRUD 尚未实现。攻略管理页面当前只能选择数据库中已经存在的启用标签。后续管理员接口固定为：
 
@@ -905,7 +935,7 @@ DELETE /voyaai/tag/{ids}
 
 权限前缀为 `voyaai:tag`。新增 JSON：`{"name":"美食","type":"guide","sort":10,"status":"0","remark":""}`。同一 `type` 下标签名称不能重复；删除标签前需要检查 `voya_ai_guide_tag` 关联，存在关联时返回 `409`。管理端列表返回 `id`、`name`、`type`、`sort`、`status`、`remark`、审计字段。
 
-### 7.8 意见反馈
+### 7.7 意见反馈
 
 小程序：
 
@@ -932,11 +962,11 @@ POST /app/voyaai/feedback
 
 ### 已完成阶段
 
-国家、省份、城市、景点的管理端 CRUD 和小程序公开浏览已经完成；微信登录、用户资料和头像已经完成；攻略管理和攻略公开读接口已经完成；收藏和点赞模块的管理端查询删除、小程序收藏、点赞、取消、状态查询和计数维护已经完成；浏览记录的匿名写入、登录用户历史查询和清空、管理端查询已经完成；搜索历史的小程序保存、去重、保留 20 条、查询、删除和清空，以及管理端查询删除已经完成。
+国家、省份、城市、景点的管理端 CRUD 和小程序公开浏览已经完成；微信登录、用户资料和头像已经完成；攻略管理和攻略公开读接口已经完成；收藏和点赞模块的管理端查询删除、小程序收藏、点赞、取消、状态查询和计数维护已经完成；浏览记录的匿名写入、登录用户历史查询和清空、管理端查询已经完成；搜索历史的小程序保存、去重、保留 20 条、查询、删除和清空，以及管理端查询删除已经完成；评论的小程序查询、发表、回复、删除、点赞和管理端查询、删除已经完成。
 
 ### 下一阶段
 
-1. 评论：先做公开列表和用户发布，再做管理端审核，并接入评论点赞。
+1. 评论审核与隐藏：启用 `status` 字段，管理端支持隐藏/恢复，公开列表只显示正常评论。
 2. 行程：完成主表、天、项的事务性 CRUD。
 3. AI：确定模型服务后接入会话和行程草案。
 4. 酒店、美食、消息、反馈：先确定数据源和管理端页面，再接入小程序。
@@ -967,6 +997,7 @@ POST /app/voyaai/feedback
 | `/voyaai/like` | 点赞管理 | 已实现 | `/voyaai/like/**` |
 | `/voyaai/viewLog` | 浏览记录 | 已实现 | `/voyaai/viewLog/**` |
 | `/voyaai/searchHistory` | 搜索历史 | 已实现 | `/voyaai/searchHistory/**` |
+| `/voyaai/comment` | 评论管理 | 已实现 | `/voyaai/comment/**` |
 | `/voyaai/tag` | 标签管理 | 规划中 | `/voyaai/tag/**` |
 | `/voyaai/feedback` | 意见反馈 | 规划中 | `/voyaai/feedback/**` |
 
@@ -992,6 +1023,7 @@ POST /app/voyaai/feedback
 | 景点、攻略详情页的点赞按钮 | 接口已实现，页面待接入 | `/app/voyaai/likes`、`/app/voyaai/likes/{targetType}/{targetId}` |
 | 我的浏览历史 | 接口已实现，小程序页面待接入 | `/app/voyaai/me/view-history`、`/app/voyaai/view-logs` |
 | 搜索页搜索历史 | 接口已实现，小程序页面待接入 | `/app/voyaai/me/search-history` |
+| 详情页评论列表和发布 | 接口已实现，小程序页面待接入 | `/app/voyaai/comments`、`/app/voyaai/comments/{id}/like` |
 
 ## 11 当前代码和文档位置
 
@@ -1004,5 +1036,6 @@ POST /app/voyaai/feedback
 点赞菜单脚本：后端仓库 `sql/voyaai_like_menu.sql`
 浏览记录菜单脚本：后端仓库 `sql/voyaai_view_log_menu.sql`
 搜索历史菜单脚本：后端仓库 `sql/voyaai_search_history_menu.sql`
+评论菜单脚本：后端仓库 `sql/voyaai_comment_menu.sql`、`sql/voyaai_comment_schema.sql`
 
 本文档是项目级接口总规范；模块细节可以在对应仓库文档中补充，但不得与本文档的 URL、字段名称、响应包装和状态码冲突。
